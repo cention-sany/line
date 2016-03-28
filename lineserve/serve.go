@@ -6,15 +6,19 @@ package main
 
 import (
 	"crypto/tls"
+	"fmt"
+	"log"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
 	"time"
 
+	"github.com/cention-sany/line"
 	"github.com/kataras/iris"
 )
 
 const usoftIP = "https://127.0.0.1:444"
+const callback = "https://sanylcs.dynu.com/line/callback"
 
 var usoftES *httputil.ReverseProxy
 
@@ -35,13 +39,32 @@ func initMicrosoftExchangeServerProxy() {
 }
 
 func main() {
+	var auth *line.Auth
+	var api *line.API
 	initMicrosoftExchangeServerProxy()
+	line.SetID("abc123")
+	line.SetSecret("abc123")
 	usoftHandler := iris.ToHandlerFunc(usoftES.ServeHTTP)
 	iris.Get("/ping", func(c *iris.Context) {
 		c.HTML("<b>pong pong</b>")
 	})
+	iris.Get("/line", func(c *iris.Context) {
+		auth = line.GetAuth(callback, "random123")
+		// Redirect user to consent page to ask for permission
+		// for the scopes specified above.
+		url := auth.GetURL()
+		log.Printf("Visit the URL for the auth dialog: %v\n", url)
+		c.HTML(fmt.Sprint("<b><a href=\"", url, "\">Click Me</a></b>"))
+	})
 	iris.Get("/line/callback", func(c *iris.Context) {
-		c.HTML("<p><b>token:</b></p><p><b>secret:</b></p>")
+		// Use the authorization code that is pushed to the redirect URL.
+		// NewTransportWithCode will do the handshake to retrieve
+		// an access token and initiate a Transport that is
+		// authorized and authenticated by the retrieved token.
+		var code string
+		api = auth.NewAPI(oauth2.NoContext, code)
+		token := api.Token.AccessToken
+		c.HTML(fmt.Sprint("<p><b>token: ", token, "</b></p>"))
 	})
 	iris.Get("/ews/*anything", usoftHandler)
 	iris.Get("/owa/*anything", usoftHandler)
