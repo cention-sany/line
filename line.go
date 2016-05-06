@@ -69,13 +69,20 @@ func SetAPI(api int) {
 	}
 }
 
-func validation(r io.Reader, h string) (bool, error) {
+func genHMACSHA256(r io.Reader) (string, error) {
 	mac := hmac.New(sha256.New, []byte(channelSecret))
 	_, err := io.Copy(mac, r)
 	if err != nil {
+		return "", err
+	}
+	return base64.StdEncoding.EncodeToString(mac.Sum(nil)), nil
+}
+
+func validation(r io.Reader, h string) (bool, error) {
+	s, err := genHMACSHA256(r)
+	if err != nil {
 		return false, err
 	}
-	s := base64.StdEncoding.EncodeToString(mac.Sum(nil))
 	if h != s {
 		return false, nil
 	}
@@ -128,8 +135,8 @@ func (p *parallelValid) Close() error {
 	return p.pw.Close()
 }
 
-func decodeRawJson(v interface{}, raw json.RawMessage) error {
-	r := bytes.NewReader([]byte(raw))
+func decodeRawJson(v interface{}, raw *json.RawMessage) error {
+	r := bytes.NewReader([]byte(*raw))
 	e := json.NewDecoder(r)
 	if err := e.Decode(v); err != nil {
 		return err

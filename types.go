@@ -109,10 +109,10 @@ type LinkMsgContent struct {
 }
 
 type SndMsg struct {
-	To        []string        `json:"to"`
-	ToChannel int             `json:"toChannel"`
-	EventType string          `json:"eventType"`
-	Content   json.RawMessage `json:"content"`
+	To        []string         `json:"to"`
+	ToChannel int              `json:"toChannel"`
+	EventType string           `json:"eventType"`
+	Content   *json.RawMessage `json:"content"`
 }
 
 type PostResponse struct {
@@ -165,25 +165,25 @@ type TimelineMsg struct {
 
 // BOT API
 type Rx struct {
-	From        string          `json:"from"`
-	FromChannel string          `json:"fromChannel"`
-	To          []string        `json:"to"`
-	ToChannel   string          `json:"toChannel"`
-	EventType   string          `json:"eventType"`
-	Id          string          `json:"id"`
-	Content     json.RawMessage `json:"content"`
+	From        string           `json:"from"`
+	FromChannel string           `json:"fromChannel"`
+	To          []string         `json:"to"`
+	ToChannel   int              `json:"toChannel"`
+	EventType   string           `json:"eventType"`
+	Id          string           `json:"id"`
+	Content     *json.RawMessage `json:"content"`
 }
 
 type Message struct {
-	Loc   *Location       `json:"location"`
-	Id    string          `json:"id"`
-	Typ   int             `json:"contentType"`
-	Frm   string          `json:"from"`
-	CTime int64           `json:"createdTime"`
-	To    []string        `json:"to"`
-	ToTyp int             `json:"toType"`
-	Meta  json.RawMessage `json:"contentMetadata"`
-	Txt   string          `json:"text"`
+	Loc   *Location        `json:"location"`
+	Id    string           `json:"id"`
+	Typ   int              `json:"contentType"`
+	Frm   string           `json:"from"`
+	CTime int64            `json:"createdTime"`
+	To    []string         `json:"to"`
+	ToTyp int              `json:"toType"`
+	Meta  *json.RawMessage `json:"contentMetadata"`
+	Txt   string           `json:"text"`
 }
 
 func (m *Message) ParseMeta() (interface{}, error) {
@@ -243,26 +243,69 @@ type Operation struct {
 	OTyp   int       `json:"opType"`
 }
 
+type JSONRaw interface {
+	ToRaw() *json.RawMessage
+}
+
 // use in conjunction with SendMsg
 type Text struct {
 	Typ   int    `json:"contentType"`
-	ToTyp int    `json:"toType"`
+	ToTyp int    `json:"toType,omitempty"`
 	Txt   string `json:"text"`
+}
+
+// func (t *Text) MarshalJSON() ([]byte, error) {
+// 	return json.Marshal(t)
+// }
+
+func (t *Text) ToRaw() *json.RawMessage {
+	b, err := json.Marshal(t)
+	if err != nil {
+		panic(err)
+	}
+	raw := json.RawMessage(b)
+	return &raw
 }
 
 // Image (2) or Video (3) type
 type ViewMedia struct {
 	Typ      int    `json:"contentType"`
-	ToTyp    int    `json:"toType"`
+	ToTyp    int    `json:"toType,omitempty"`
 	Original string `json:"originalContentUrl"`
 	Preview  string `json:"previewImageUrl"`
 }
 
+// func (vm *ViewMedia) MarshalJSON() ([]byte, error) {
+// 	return json.Marshal(vm)
+// }
+
+func (vm *ViewMedia) ToRaw() *json.RawMessage {
+	b, err := json.Marshal(vm)
+	if err != nil {
+		panic(err)
+	}
+	raw := json.RawMessage(b)
+	return &raw
+}
+
 type Audio struct {
 	Typ      int    `json:"contentType"`
-	ToTyp    int    `json:"toType"`
+	ToTyp    int    `json:"toType,omitempty"`
 	Original string `json:"originalContentUrl"`
 	Meta     AudLen `json:"contentMetadata"`
+}
+
+// func (a *Audio) MarshalJSON() ([]byte, error) {
+// 	return json.Marshal(a)
+// }
+
+func (a *Audio) ToRaw() *json.RawMessage {
+	b, err := json.Marshal(a)
+	if err != nil {
+		panic(err)
+	}
+	raw := json.RawMessage(b)
+	return &raw
 }
 
 type AudLen struct {
@@ -271,20 +314,46 @@ type AudLen struct {
 
 type SndLocation struct {
 	Typ   int      `json:"contentType"`
-	ToTyp int      `json:"toType"`
+	ToTyp int      `json:"toType,omitempty"`
 	Txt   string   `json:"text"`
 	Loc   Location `json:"location"`
 }
 
+// func (sl *SndLocation) MarshalJSON() ([]byte, error) {
+// 	return json.Marshal(sl)
+// }
+
+func (sl *SndLocation) ToRaw() *json.RawMessage {
+	b, err := json.Marshal(sl)
+	if err != nil {
+		panic(err)
+	}
+	raw := json.RawMessage(b)
+	return &raw
+}
+
 type SndSticker struct {
 	Typ   int     `json:"contentType"`
-	ToTyp int     `json:"toType"`
+	ToTyp int     `json:"toType,omitempty"`
 	Meta  Sticker `json:"contentMetadata"`
 }
 
+// func (ss *SndSticker) MarshalJSON() ([]byte, error) {
+// 	return json.Marshal(ss)
+// }
+
+func (ss *SndSticker) ToRaw() *json.RawMessage {
+	b, err := json.Marshal(ss)
+	if err != nil {
+		panic(err)
+	}
+	raw := json.RawMessage(b)
+	return &raw
+}
+
 type MultiMsgs struct {
-	Notified int               `json:"messageNotified"`
-	Msgs     []json.RawMessage `json:"messages"`
+	Notified int                `json:"messageNotified"`
+	Msgs     []*json.RawMessage `json:"messages"`
 }
 
 type RichMsg struct {
@@ -338,16 +407,14 @@ type RichListen struct {
 }
 
 type RichMsgContent struct {
-	Typ   int          `json:"contentType"`
-	ToTyp int          `json:"toType"`
-	Meta  *RichMsgMeta `json:"contentMetadata"`
-}
-
-type RichMsgMeta struct {
-	Url string `json:"DOWNLOAD_URL"`
-	Rev string `json:"SPEC_REV"`
-	Alt string `json:"ALT_TEXT"`
-	Jsn string `json:"MARKUP_JSON,string"`
+	Typ   int `json:"contentType"`
+	ToTyp int `json:"toType"`
+	Meta  struct {
+		Url string `json:"DOWNLOAD_URL"`
+		Rev string `json:"SPEC_REV"`
+		Alt string `json:"ALT_TEXT"`
+		Jsn string `json:"MARKUP_JSON,string"`
+	} `json:"contentMetadata"`
 }
 
 type Result struct {

@@ -3,6 +3,7 @@ package line
 import (
 	"bufio"
 	"bytes"
+	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -47,7 +48,7 @@ func (b *BOTServer) Serve(w http.ResponseWriter, r *http.Request) {
 	rc, f := newParallelValid(r.Body, s)
 	var result Result
 	e := json.NewDecoder(rc)
-	if err := e.Decode(result); err != nil {
+	if err := e.Decode(&result); err != nil {
 		invalidPost(w, r.URL.Path, err.Error())
 		return
 	}
@@ -73,14 +74,18 @@ func (b *BOTServer) Serve(w http.ResponseWriter, r *http.Request) {
 				invalidPost(w, r.URL.Path, err.Error())
 				return
 			}
-			b.mH(&msg)
+			if b.mH != nil {
+				b.mH(&msg)
+			}
 		case ET_OP_ADD:
 			var opr Operation
 			if err := decodeRawJson(&opr, result.R[i].Content); err != nil {
 				invalidPost(w, r.URL.Path, err.Error())
 				return
 			}
-			b.oH(&opr)
+			if b.oH != nil {
+				b.oH(&opr)
+			}
 		}
 	}
 	w.WriteHeader(http.StatusOK)
@@ -117,7 +122,7 @@ func sendMessages(to []string, evt string, r json.RawMessage) error {
 		To:        to,
 		ToChannel: TO_Ch,
 		EventType: evt,
-		Content:   r,
+		Content:   &r,
 	}
 	b := new(bytes.Buffer)
 	e := json.NewEncoder(b)
@@ -133,6 +138,10 @@ func sendMessages(to []string, evt string, r json.RawMessage) error {
 	req.Header["X-Line-ChannelSecret"] = []string{channelSecret}
 	req.Header["X-Line-Trusted-User-With-ACL"] = []string{channelMID}
 	c := http.DefaultClient
+	tr := &http.Transport{
+		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+	}
+	c.Transport = tr
 	resp, err := c.Do(req)
 	if err != nil {
 		return err
@@ -209,7 +218,7 @@ func SendAudio(to []string, url, d string) error {
 	if err := e.Encode(v); err != nil {
 		return err
 	}
-	return sendMessages(to, ET_MultiMedia, b.Bytes())
+	return sendMessages(to, ET_MultiMedia, json.RawMessage(b.Bytes()))
 }
 
 func SendLocation(to []string, s string, lat, long float32) error {
@@ -268,16 +277,13 @@ func SendRichMessages(to []string, url, s string, rm *RichMsg) error {
 	if err := e.Encode(rm); err != nil {
 		return err
 	}
-	v := RichMsgContent{
-		Typ:   CT_Rich_Msg,
-		ToTyp: RT_Usr,
-		Meta: &RichMsgMeta{
-			Url: url,
-			Rev: "1",
-			Alt: s,
-			Jsn: b.String(),
-		},
-	}
+	var v RichMsgContent
+	v.Typ = CT_Rich_Msg
+	v.ToTyp = RT_Usr
+	v.Meta.Url = url
+	v.Meta.Rev = "1"
+	v.Meta.Alt = s
+	v.Meta.Jsn = b.String()
 	b = new(bytes.Buffer)
 	e = json.NewEncoder(b)
 	if err := e.Encode(v); err != nil {
